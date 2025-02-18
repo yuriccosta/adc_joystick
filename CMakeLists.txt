@@ -45,7 +45,7 @@ pico_generate_pio_header(adc_joystick ${CMAKE_CURRENT_LIST_DIR}/animacao_matriz.
 
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(adc_joystick 0)
+pico_enable_stdio_uart(adc_joystick 1)
 pico_enable_stdio_usb(adc_joystick 1)
 
 # Add the standard library to the build

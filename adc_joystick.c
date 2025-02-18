@@ -17,10 +17,12 @@
 #define LED_PIN_GREEN 11
 #define LED_PIN_BLUE 12
 #define LED_PIN_RED 13
-#define LED_COUNT 25            // Número de LEDs na matriz
-#define MATRIZ_PIN 7            // Pino GPIO conectado aos LEDs WS2818B
+#define JOY_X 27 // PDF ESTÁ TROCADO
+#define JOY_Y 26
+#define SW_PIN 22
 #define BUTTON_PIN_A 5          // Pino GPIO conectado ao botão A
-#define BUTTON_PIN_B 6          // Pino GPIO conectado ao botão B
+#define zona_morta 100
+
 #define I2C_PORT i2c1
 #define I2C_SDA 14
 #define I2C_SCL 15
@@ -36,92 +38,38 @@ static volatile uint green_state = 0; // Variável para armazenar o estado do LE
 static volatile uint blue_state = 0; // Variável para armazenar o estado do LED azul
 
 
-double padrao_led[10][LED_COUNT] = {
-        {0, 1, 1, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 1, 1, 0,
-        }, // 0
-        {0, 0, 1, 0, 0,
-         0, 1, 1, 0, 0,
-         1, 0, 1, 0, 0,
-         0, 0, 1, 0, 0,
-         0, 0, 1, 0, 0,
-        }, // 1
-        {0, 1, 1, 1, 0,
-         0, 0, 0, 1, 0,
-         0, 0, 1, 0, 0,
-         0, 1, 0, 0, 0,
-         0, 1, 1, 1, 0,
-        },  // 2
-        {0, 1, 1, 1, 0,
-         0, 0, 0, 1, 0,
-         0, 1, 1, 1, 0,
-         0, 0, 0, 1, 0,
-         0, 1, 1, 1, 0,
-        }, // 3
-        {0, 1, 0, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 1, 1, 0,
-         0, 0, 0, 1, 0,
-         0, 0, 0, 1, 0,
-        }, // 4
-        {0, 1, 1, 1, 0,
-         0, 1, 0, 0, 0,
-         0, 1, 1, 1, 0,
-         0, 0, 0, 1, 0,
-         0, 1, 1, 1, 0,
-        }, // 5
-        {0, 1, 1, 1, 0,
-         0, 1, 0, 0, 0,
-         0, 1, 1, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 1, 1, 0,
-        },  // 6
-        {0, 1, 1, 1, 1,
-         0, 0, 0, 0, 1,
-         0, 0, 0, 1, 0,
-         0, 0, 1, 0, 0,
-         0, 0, 1, 0, 0,
-        }, // 7
-        {0, 1, 1, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 1, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 1, 1, 0,
-        }, // 8
-        {0, 1, 1, 1, 0,
-         0, 1, 0, 1, 0,
-         0, 1, 1, 1, 0,
-         0, 0, 0, 1, 0,
-         0, 1, 1, 1, 0,
-        }  // 9
-    };
 
-// Ordem da matriz de LEDS, útil para poder visualizar na matriz do código e escrever na ordem correta do hardware
-int ordem[LED_COUNT] = {0, 1, 2, 3, 4, 9, 8, 7, 6, 5, 10, 11, 12, 13, 14, 19, 18, 17, 16, 15, 20, 21, 22, 23, 24};  
+void pwm_setup(uint pino) {
+    gpio_set_function(pino, GPIO_FUNC_PWM);         // Configura o pino como saída PWM
+    uint slice = pwm_gpio_to_slice_num(pino);         // Obtém o slice correspondente
 
+    // Configura o divisor de clock:
+    //pwm_set_clkdiv(slice, 4.0);
+    
+    pwm_set_wrap(slice, 4095);
 
-//rotina para definição da intensidade de cores do led
-uint32_t matrix_rgb(double r)
-{
-  // Para não ficar forte demais, a intensidade de cor é multiplicada por 50
-  unsigned char R;
-  R = r * 255; 
-  return (R << 16);
+    pwm_set_enabled(slice, true);  // Habilita o slice PWM
 }
 
-void display_num(int number){
-    uint32_t valor_led;
+void configuraGPIO(){
+    // Configuração do LED RGB
+    pwm_setup(LED_PIN_RED);
 
-    for (int i = 0; i < LED_COUNT; i++){
-        // Define a cor do LED de acordo com o padrão
-        valor_led = matrix_rgb(padrao_led[number][ordem[24 - i]]);
-        // Atualiza o LED
-        pio_sm_put_blocking(pio, sm, valor_led);
-    }
+    pwm_setup(LED_PIN_BLUE);
+
+    gpio_init(LED_PIN_GREEN);
+    gpio_set_dir(LED_PIN_GREEN, GPIO_OUT);
+
+    // Configura os botões
+    gpio_init(BUTTON_PIN_A);
+    gpio_set_dir(BUTTON_PIN_A, GPIO_IN);
+    gpio_pull_up(BUTTON_PIN_A);
+
+    gpio_init (SW_PIN);
+    gpio_set_dir(SW_PIN, GPIO_IN);
+    gpio_pull_up(SW_PIN);
 }
+
 
 
 static void gpio_irq_handler(uint gpio, uint32_t events) {
@@ -147,23 +95,6 @@ static void gpio_irq_handler(uint gpio, uint32_t events) {
             ssd1306_draw_string(&ssd, string, 8, 30); // Desenha uma string
             ssd1306_send_data(&ssd); // Atualiza o display
 
-        } else if(gpio == BUTTON_PIN_B){
-            blue_state = !blue_state;
-            gpio_put(LED_PIN_BLUE, blue_state);
-
-            char string[13];
-            snprintf(string, 13, "Led azul %u\n", blue_state);
-
-            printf("Botão B pressionado\n");
-            printf(string);
-
-            // Atualiza o conteúdo do display com animações
-            ssd1306_fill(&ssd, true); // Limpa o display
-            ssd1306_rect(&ssd, 3, 3, 122, 58, false, true); // Desenha um retângulo
-            ssd1306_draw_string(&ssd, "Botao B", 8, 10); // Desenha uma string
-            ssd1306_draw_string(&ssd, "pressionado", 8, 20); // Desenha uma string
-            ssd1306_draw_string(&ssd, string, 8, 30); // Desenha uma string
-            ssd1306_send_data(&ssd); // Atualiza o display
         }
 
         last_time = current_time; // Atualiza o tempo do último evento
@@ -171,84 +102,66 @@ static void gpio_irq_handler(uint gpio, uint32_t events) {
 }
 
 int main(){
-  // I2C Initialisation. Using it at 400Khz.
-  i2c_init(I2C_PORT, 400 * 1000);
+    // I2C Initialisation. Using it at 400Khz.
+    i2c_init(I2C_PORT, 400 * 1000);
 
-  gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
-  gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
-  gpio_pull_up(I2C_SDA); // Pull up the data line
-  gpio_pull_up(I2C_SCL); // Pull up the clock line
-  ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
-  ssd1306_config(&ssd); // Configura o display
-  ssd1306_send_data(&ssd); // Envia os dados para o display
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
+    gpio_pull_up(I2C_SDA); // Pull up the data line
+    gpio_pull_up(I2C_SCL); // Pull up the clock line
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
+    ssd1306_config(&ssd); // Configura o display
+    ssd1306_send_data(&ssd); // Envia os dados para o display
 
-  // Limpa o display. O display inicia com todos os pixels apagados.
-  ssd1306_fill(&ssd, false);
-  ssd1306_send_data(&ssd);
-
-  
-  // Configuração do PIO
-  pio = pio0; 
-  bool ok;
-  
-  //coloca a frequência de clock para 128 MHz, facilitando a divisão pelo clock
-  ok = set_sys_clock_khz(128000, false);
-
-  stdio_init_all(); // Inicializa a comunicação serial
-
-  printf("iniciando a transmissão PIO");
-  if (ok) printf("clock set to %ld\n", clock_get_hz(clk_sys));
-
-  uint offset = pio_add_program(pio, &animacao_matriz_program);
-  sm = pio_claim_unused_sm(pio, true);
-  animacao_matriz_program_init(pio, sm, offset, MATRIZ_PIN);
+    // Limpa o display. O display inicia com todos os pixels apagados.
+    ssd1306_fill(&ssd, false);
+    ssd1306_send_data(&ssd);
 
 
-  // Configuração do LED RGB
-  gpio_init(LED_PIN_RED);
-  gpio_set_dir(LED_PIN_RED, GPIO_OUT);
 
-  gpio_init(LED_PIN_GREEN);
-  gpio_set_dir(LED_PIN_GREEN, GPIO_OUT);
+    // Configura os LEDs e botões
+    configuraGPIO();
 
-  gpio_init(LED_PIN_BLUE);
-  gpio_set_dir(LED_PIN_BLUE, GPIO_OUT);
-
-
-  // Configura os botões
-  gpio_init(BUTTON_PIN_A);
-  gpio_set_dir(BUTTON_PIN_A, GPIO_IN);
-  gpio_pull_up(BUTTON_PIN_A);
-
-  gpio_init(BUTTON_PIN_B);
-  gpio_set_dir(BUTTON_PIN_B, GPIO_IN);
-  gpio_pull_up(BUTTON_PIN_B);
+    // Configuração do ADC
+    adc_init();
+    adc_gpio_init(JOY_X);
+    adc_gpio_init(JOY_Y);
 
 
-  // Configuração da interrupção
-  gpio_set_irq_enabled_with_callback(BUTTON_PIN_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-  gpio_set_irq_enabled_with_callback(BUTTON_PIN_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+    // Configuração da interrupção
+    gpio_set_irq_enabled_with_callback(BUTTON_PIN_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
+    uint32_t last_print_time = 0; 
+
+    stdio_init_all();
     while (true){
-        if (stdio_usb_connected()){ // Certifica-se de que o USB está conectado
-            char c;
-            if (scanf("%c", &c) == 1){ // Lê caractere da entrada padrão
-                printf("Recebido: '%c'\n", c);
-                
-                if (c <= '9' && c >= '0'){
-                    int num = c - '0';
-                    display_num(num);
-                }
+        adc_select_input(1);  
+        uint16_t vrx_value = adc_read(); 
+        adc_select_input(0);  
+        uint16_t vry_value = adc_read(); 
 
-                char string[2] = {c, '\0'};
-                // Atualiza o conteúdo do display com animações
-                ssd1306_fill(&ssd, true); // Limpa o display
-                ssd1306_rect(&ssd, 3, 3, 122, 58, false, true); // Desenha um retângulo
-                ssd1306_draw_string(&ssd, string, 8, 10); // Desenha uma string 
-                ssd1306_send_data(&ssd); // Atualiza o display
-            }
+
+        // Aumenta os valores do pwm ao se aproximar dos extremos do eixo x e y
+        uint16_t pwm_x = (abs(vrx_value - 2048) > zona_morta) ? abs(vrx_value - 2048) : 0;
+        uint16_t pwm_y = (abs(vry_value - 2048) > zona_morta) ? abs(vry_value - 2048) : 0;
+
+        pwm_set_gpio_level(LED_PIN_RED, pwm_x); 
+        pwm_set_gpio_level(LED_PIN_BLUE, pwm_y);
+
+        float duty_cycle_x = (vrx_value / 4095.0) * 100;  
+        float duty_cycle_y = (vry_value / 4095.0) * 100;
+
+        
+        uint32_t current_time = to_ms_since_boot(get_absolute_time());  
+        if (current_time - last_print_time >= 1000) {  
+            printf("VRX: %u\n", vrx_value); 
+            printf("VRY: %u\n", vry_value);
+            printf("Duty Cycle LED: %.2f%%\n", duty_cycle_x); 
+            printf("Duty Cycle LED: %.2f%%\n", duty_cycle_y);
+            last_print_time = current_time;  
         }
-        sleep_ms(100);
+
+        sleep_ms(100); 
     }
 
     return 0;
