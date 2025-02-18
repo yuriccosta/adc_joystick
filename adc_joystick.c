@@ -61,6 +61,7 @@ void configuraGPIO(){
 
     gpio_init(LED_PIN_GREEN);
     gpio_set_dir(LED_PIN_GREEN, GPIO_OUT);
+    gpio_put(LED_PIN_GREEN, green_state);
 
     // Configura os botões
     gpio_init(BUTTON_PIN_A);
@@ -129,20 +130,24 @@ int main(){
     stdio_init_all();
 
     while (true){
+        // Leitura dos valores do joystick
         adc_select_input(1);  
         uint16_t vrx_value = adc_read(); 
+
         adc_select_input(0);  
         uint16_t vry_value = adc_read(); 
 
+        // Verifica se o controle PWM está habilitado
         if (led_pwm){
-
             // Aumenta os valores do pwm ao se aproximar dos extremos do eixo x e y
             uint16_t pwm_x = (abs(vrx_value - 2048) > zona_morta) ? abs(vrx_value - 2048) * 2 : 0;
             uint16_t pwm_y = (abs(vry_value - 2048) > zona_morta) ? abs(vry_value - 2048) * 2 : 0;
-
+            
+            // Atualiza o valor do PWM
             pwm_set_gpio_level(LED_PIN_RED, pwm_x); 
             pwm_set_gpio_level(LED_PIN_BLUE, pwm_y);
             
+            // Calcula o duty cycle do PWM
             float duty_cycle_x = (pwm_x / max_value_joy) * 100;  
             float duty_cycle_y = (pwm_y / max_value_joy) * 100;
 
@@ -177,7 +182,7 @@ int main(){
 
         ssd1306_fill(&ssd, cor); // Limpa o display
         ssd1306_rect(&ssd, 3, 3, 122, 58, !cor, cor); // Desenha um retângulo
-        ssd1306_rect(&ssd, y, x, 8, 8, true, true); // Desenha um retângulo
+        ssd1306_rect(&ssd, y, x, 8, 8, true, true); // Desenha um quadrado
         ssd1306_send_data(&ssd); // Atualiza o display
 
         sleep_ms(100); 
