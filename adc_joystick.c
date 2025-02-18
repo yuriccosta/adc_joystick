@@ -22,7 +22,7 @@
 #define SW_PIN 22
 #define BUTTON_PIN_A 5          // Pino GPIO conectado ao botão A
 #define zona_morta 100
-#define max_value_joy 4095.0 // Maior valor lido pelo joystick no hardware
+#define max_value_joy 4081.0 // Maior valor lido pelo joystick no hardware
 
 #define I2C_PORT i2c1
 #define I2C_SDA 14
@@ -114,7 +114,6 @@ int main(){
 
     // Configura os LEDs e botões
     configuraGPIO();
-
     // Configuração do ADC
     adc_init();
     adc_gpio_init(JOY_X);
@@ -128,6 +127,7 @@ int main(){
     uint32_t last_print_time = 0; 
 
     stdio_init_all();
+
     while (true){
         adc_select_input(1);  
         uint16_t vrx_value = adc_read(); 
@@ -159,18 +159,25 @@ int main(){
             } 
         }
         
-        uint16_t x = (vrx_value * WIDTH) / max_value_joy;
-        uint16_t y = HEIGHT - ((vry_value * HEIGHT) / max_value_joy);
+        // x e y são o centro do quadrado
+        uint16_t x = (vrx_value * WIDTH) / max_value_joy; // Calcula a posição do eixo x 
+        uint16_t y = HEIGHT - ((vry_value * HEIGHT) / max_value_joy); // Calcula a posição do eixo y
 
-        x = (x > 8) ? x : 8;
-        y = (y > 8) ? y : 8;
+        // Limita a posição do quadrado para não ultrapassar as bordas do retangulo
+        if (x > 120) x = 120;
+        if (x < 8) x = 8;
+        if (y > 56) y = 56;
+        if (y < 8) y = 8;
 
-        //printf("X: %u\n", x);
-        //printf("Y: %u\n", y);
+        x = x - 4; // Ajusta a posição do quadrado para passar para a função de desenho
+        y = y - 4; // Ajusta a posição do quadrado para passar para a função de desenho
+
+        printf("X: %u\n", x);
+        printf("Y: %u\n", y);
 
         ssd1306_fill(&ssd, cor); // Limpa o display
         ssd1306_rect(&ssd, 3, 3, 122, 58, !cor, cor); // Desenha um retângulo
-        ssd1306_rect(&ssd, y - 8, x - 8, 8, 8, true, true); // Desenha um retângulo
+        ssd1306_rect(&ssd, y, x, 8, 8, true, true); // Desenha um retângulo
         ssd1306_send_data(&ssd); // Atualiza o display
 
         sleep_ms(100); 
