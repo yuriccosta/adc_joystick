@@ -17,11 +17,12 @@
 #define LED_PIN_GREEN 11
 #define LED_PIN_BLUE 12
 #define LED_PIN_RED 13
-#define JOY_X 27 // PDF ESTÁ TROCADO
+#define JOY_X 27 // Joystick está de lado em relação ao que foi dito no pdf
 #define JOY_Y 26
 #define SW_PIN 22
 #define BUTTON_PIN_A 5          // Pino GPIO conectado ao botão A
 #define zona_morta 100
+#define max_value_joy 4095.0 // Maior valor lido pelo joystick no hardware
 
 #define I2C_PORT i2c1
 #define I2C_SDA 14
@@ -35,7 +36,8 @@ uint sm;
 ssd1306_t ssd; // Inicializa a estrutura do display
 static volatile uint32_t last_time = 0; // Variável para armazenar o tempo do último evento
 static volatile uint green_state = 0; // Variável para armazenar o estado do LED verde
-static volatile uint blue_state = 0; // Variável para armazenar o estado do LED azul
+static volatile uint led_pwm = 1; // Variável para habilitar/desabilitar o controle PWM dos LEDs
+static volatile uint cor = 0; // Variável para armazenar a cor da borda do display
 
 
 
@@ -46,7 +48,7 @@ void pwm_setup(uint pino) {
     // Configura o divisor de clock:
     //pwm_set_clkdiv(slice, 4.0);
     
-    pwm_set_wrap(slice, 4095);
+    pwm_set_wrap(slice, max_value_joy);
 
     pwm_set_enabled(slice, true);  // Habilita o slice PWM
 }
@@ -78,22 +80,13 @@ static void gpio_irq_handler(uint gpio, uint32_t events) {
     // Verificação de tempo para debounce
     if (current_time - last_time > 200){
         if(gpio == BUTTON_PIN_A){
+            led_pwm = !led_pwm;
+            printf("PWM alterado para %u\n", led_pwm);  
+
+        } else if (gpio == SW_PIN){
             green_state = !green_state;
+            cor = !cor;
             gpio_put(LED_PIN_GREEN, green_state);
-
-            char string[13];
-            snprintf(string, 13, "Led verde %u\n", green_state);
-
-            printf("Botão A pressionado\n");
-            printf(string);
-
-            // Atualiza o conteúdo do display com animações
-            ssd1306_fill(&ssd, true); // Limpa o display
-            ssd1306_rect(&ssd, 3, 3, 122, 58, false, true); // Desenha um retângulo
-            ssd1306_draw_string(&ssd, "Botao A", 8, 10); // Desenha uma string
-            ssd1306_draw_string(&ssd, "pressionado", 8, 20); // Desenha uma string
-            ssd1306_draw_string(&ssd, string, 8, 30); // Desenha uma string
-            ssd1306_send_data(&ssd); // Atualiza o display
 
         }
 
@@ -130,6 +123,7 @@ int main(){
 
     // Configuração da interrupção
     gpio_set_irq_enabled_with_callback(BUTTON_PIN_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+    gpio_set_irq_enabled_with_callback(SW_PIN, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
     uint32_t last_print_time = 0; 
 
@@ -140,26 +134,44 @@ int main(){
         adc_select_input(0);  
         uint16_t vry_value = adc_read(); 
 
+        if (led_pwm){
 
-        // Aumenta os valores do pwm ao se aproximar dos extremos do eixo x e y
-        uint16_t pwm_x = (abs(vrx_value - 2048) > zona_morta) ? abs(vrx_value - 2048) : 0;
-        uint16_t pwm_y = (abs(vry_value - 2048) > zona_morta) ? abs(vry_value - 2048) : 0;
+            // Aumenta os valores do pwm ao se aproximar dos extremos do eixo x e y
+            uint16_t pwm_x = (abs(vrx_value - 2048) > zona_morta) ? abs(vrx_value - 2048) * 2 : 0;
+            uint16_t pwm_y = (abs(vry_value - 2048) > zona_morta) ? abs(vry_value - 2048) * 2 : 0;
 
-        pwm_set_gpio_level(LED_PIN_RED, pwm_x); 
-        pwm_set_gpio_level(LED_PIN_BLUE, pwm_y);
+            pwm_set_gpio_level(LED_PIN_RED, pwm_x); 
+            pwm_set_gpio_level(LED_PIN_BLUE, pwm_y);
+            
+            float duty_cycle_x = (pwm_x / max_value_joy) * 100;  
+            float duty_cycle_y = (pwm_y / max_value_joy) * 100;
 
-        float duty_cycle_x = (vrx_value / 4095.0) * 100;  
-        float duty_cycle_y = (vry_value / 4095.0) * 100;
-
-        
-        uint32_t current_time = to_ms_since_boot(get_absolute_time());  
-        if (current_time - last_print_time >= 1000) {  
-            printf("VRX: %u\n", vrx_value); 
-            printf("VRY: %u\n", vry_value);
-            printf("Duty Cycle LED: %.2f%%\n", duty_cycle_x); 
-            printf("Duty Cycle LED: %.2f%%\n", duty_cycle_y);
-            last_print_time = current_time;  
+            
+            uint32_t current_time = to_ms_since_boot(get_absolute_time());  
+            if (current_time - last_print_time >= 1000) {  
+                printf("VRX: %u\n", vrx_value); 
+                printf("VRY: %u\n", vry_value);
+                printf("PWM X: %u\n", pwm_x);
+                printf("PWM Y: %u\n", pwm_y);
+                printf("Duty Cycle LED: %.2f%%\n", duty_cycle_x); 
+                printf("Duty Cycle LED: %.2f%%\n", duty_cycle_y);
+                last_print_time = current_time;  
+            } 
         }
+        
+        uint16_t x = (vrx_value * WIDTH) / max_value_joy;
+        uint16_t y = HEIGHT - ((vry_value * HEIGHT) / max_value_joy);
+
+        x = (x > 8) ? x : 8;
+        y = (y > 8) ? y : 8;
+
+        //printf("X: %u\n", x);
+        //printf("Y: %u\n", y);
+
+        ssd1306_fill(&ssd, cor); // Limpa o display
+        ssd1306_rect(&ssd, 3, 3, 122, 58, !cor, cor); // Desenha um retângulo
+        ssd1306_rect(&ssd, y - 8, x - 8, 8, 8, true, true); // Desenha um retângulo
+        ssd1306_send_data(&ssd); // Atualiza o display
 
         sleep_ms(100); 
     }
