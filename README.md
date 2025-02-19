@@ -31,8 +31,8 @@
 
 
 ## Explicações
-- Foi definido uma variavel para ser a zona morta, pois o joystick em hardware não fica exatamente no centro
-- Foi alterado o wrap para 4066 pois o joystick em hardware não alcança 4095 e 0. Ele vai de 16 a 4081, e para fazer com que ele brilhe com sua intensidade máxima nos extremos, foi necessário que o wrap alterasse para (4081 - 16) e dessa forma o duty cycle consegue atingir 100% nas extremidades
+- Foi definido uma variavel para ser a zona morta, pois o joystick em hardware não fica exatamente no centro e varia bastante
+- Foi alterado o wrap para 4066 pois o joystick em hardware não alcança 4095 e 0. Ele vai de 16 a 4081 no meu caso, e para fazer com que ele brilhe com sua intensidade máxima nos extremos, foi necessário que o wrap alterasse para (4081 - 16) e dessa forma o duty cycle consegue atingir 100% nas extremidades
 
 ## Vídeo de Demonstração
 Assista à demonstração do projeto em execução:  
