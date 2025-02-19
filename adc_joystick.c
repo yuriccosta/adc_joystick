@@ -22,7 +22,7 @@
 #define SW_PIN 22
 #define BUTTON_PIN_A 5          // Pino GPIO conectado ao botão A
 #define zona_morta 100
-#define max_value_joy 4081.0 // Maior valor lido pelo joystick no hardware
+#define max_value_joy 4065.0 // (4081 - 16) que são os valores extremos máximos lidos pelo meu joystick
 
 #define I2C_PORT i2c1
 #define I2C_SDA 14
@@ -125,7 +125,6 @@ int main(){
     gpio_set_irq_enabled_with_callback(BUTTON_PIN_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(SW_PIN, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
-    uint32_t last_print_time = 0; 
 
     stdio_init_all();
 
@@ -146,22 +145,7 @@ int main(){
             // Atualiza o valor do PWM
             pwm_set_gpio_level(LED_PIN_RED, pwm_x); 
             pwm_set_gpio_level(LED_PIN_BLUE, pwm_y);
-            
-            // Calcula o duty cycle do PWM
-            float duty_cycle_x = (pwm_x / max_value_joy) * 100;  
-            float duty_cycle_y = (pwm_y / max_value_joy) * 100;
-
-            
-            uint32_t current_time = to_ms_since_boot(get_absolute_time());  
-            if (current_time - last_print_time >= 1000) {  
-                printf("VRX: %u\n", vrx_value); 
-                printf("VRY: %u\n", vry_value);
-                printf("PWM X: %u\n", pwm_x);
-                printf("PWM Y: %u\n", pwm_y);
-                printf("Duty Cycle LED: %.2f%%\n", duty_cycle_x); 
-                printf("Duty Cycle LED: %.2f%%\n", duty_cycle_y);
-                last_print_time = current_time;  
-            } 
+        
         }
         
         // x e y são o centro do quadrado
@@ -176,10 +160,7 @@ int main(){
 
         x = x - 4; // Ajusta a posição do quadrado para passar para a função de desenho
         y = y - 4; // Ajusta a posição do quadrado para passar para a função de desenho
-
-        printf("X: %u\n", x);
-        printf("Y: %u\n", y);
-
+        
         ssd1306_fill(&ssd, cor); // Limpa o display
         ssd1306_rect(&ssd, 3, 3, 122, 58, !cor, cor); // Desenha um retângulo
         ssd1306_rect(&ssd, y, x, 8, 8, true, true); // Desenha um quadrado
